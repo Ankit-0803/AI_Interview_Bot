@@ -1,0 +1,44 @@
+{
+  "roles": [
+    {
+      "id": "frontend_developer",
+      "title": "Frontend Developer",
+      "description": "Responsible for developing user-facing web applications using modern JavaScript frameworks like React, Vue.js, or Angular. Focus on creating responsive, accessible, and performant user interfaces while collaborating with UX/UI designers and backend developers.",
+      "key_skills": ["JavaScript", "React/Vue/Angular", "HTML/CSS", "Responsive Design", "Testing", "Git"],
+      "experience_level": "Mid-Senior Level",
+      "department": "Engineering"
+    },
+    {
+      "id": "data_scientist",
+      "title": "Data Scientist",
+      "description": "Analyze complex datasets to extract actionable insights, build predictive models, and create data visualizations. Work with stakeholders to understand business problems and translate them into data science solutions using Python, R, and machine learning techniques.",
+      "key_skills": ["Python", "Machine Learning", "Statistics", "Data Visualization", "SQL", "Communication"],
+      "experience_level": "Mid-Senior Level",
+      "department": "Data & Analytics"
+    },
+    {
+      "id": "product_manager",
+      "title": "Product Manager",
+      "description": "Lead product strategy and development by working closely with engineering, design, and business teams. Define product roadmaps, prioritize features, conduct market research, and ensure successful product launches while maintaining focus on user needs and business objectives.",
+      "key_skills": ["Strategy", "Stakeholder Management", "Analytics", "User Research", "Communication", "Leadership"],
+      "experience_level": "Mid-Senior Level",
+      "department": "Product"
+    },
+    {
+      "id": "devops_engineer",
+      "title": "DevOps Engineer",
+      "description": "Design and maintain CI/CD pipelines, manage cloud infrastructure, and ensure system reliability and scalability. Collaborate with development teams to streamline deployment processes and implement monitoring, logging, and security best practices.",
+      "key_skills": ["AWS/Azure/GCP", "Docker/Kubernetes", "CI/CD", "Infrastructure as Code", "Monitoring", "Security"],
+      "experience_level": "Mid-Senior Level",
+      "department": "Engineering"
+    },
+    {
+      "id": "marketing_specialist",
+      "title": "Digital Marketing Specialist",
+      "description": "Develop and execute digital marketing campaigns across various channels including social media, email, content marketing, and paid advertising. Analyze campaign performance, optimize conversion rates, and contribute to brand awareness and lead generation initiatives.",
+      "key_skills": ["Digital Marketing", "Analytics", "Content Creation", "SEO/SEM", "Social Media", "Communication"],
+      "experience_level": "Mid Level",
+      "department": "Marketing"
+    }
+  ]
+}
