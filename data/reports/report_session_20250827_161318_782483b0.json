@@ -1,0 +1,78 @@
+{
+  "session_id": "session_20250827_161318_782483b0",
+  "candidate_name": "AK",
+  "role": {
+    "id": "data_scientist",
+    "title": "Data Scientist",
+    "description": "Analyze complex datasets to extract actionable insights, build predictive models, and create data visualizations. Work with stakeholders to understand business problems and translate them into data science solutions using Python, R, and machine learning techniques.",
+    "key_skills": [
+      "Python",
+      "Machine Learning",
+      "Statistics",
+      "Data Visualization",
+      "SQL",
+      "Communication"
+    ],
+    "experience_level": "Mid-Senior Level",
+    "department": "Data & Analytics"
+  },
+  "qa_pairs": [
+    {
+      "question_number": 1,
+      "question": "Tell me about your experience in Data Scientist roles and what attracted you to this field.",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    },
+    {
+      "question_number": 2,
+      "question": "Can you describe a challenging project you've worked on recently and how you approached it?",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    },
+    {
+      "question_number": 3,
+      "question": "How do you stay updated with the latest trends and technologies in your field?",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    },
+    {
+      "question_number": 4,
+      "question": "Tell me about a time when you had to work under pressure or tight deadlines. How did you manage it?",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    },
+    {
+      "question_number": 5,
+      "question": "Describe a situation where you had to collaborate with team members who had different opinions. How did you handle it?",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    },
+    {
+      "question_number": 6,
+      "question": "What do you consider your greatest professional achievement so far, and why?",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    }
+  ],
+  "evaluation": {
+    "overall_score": 1.5,
+    "summary": "Candidate may need additional development. Responses were brief and didn't fully demonstrate the required level of expertise for this role.",
+    "skill_ratings": {
+      "Python": 1.0,
+      "Machine Learning": 1.0,
+      "Statistics": 1.0,
+      "Data Visualization": 1.0,
+      "SQL": 1.0,
+      "Communication": 1.0
+    },
+    "recommendations": [
+      "Below expectations - May not be suitable for current role",
+      "Consider for junior positions or provide additional training",
+      "Areas needing improvement: Python, Machine Learning, Statistics"
+    ],
+    "evaluation_date": "2025-08-27 16:22:05",
+    "total_questions": 6
+  },
+  "total_duration_minutes": 8.53473418156306,
+  "completed_at": "2025-08-27T16:22:05.209131"
+}

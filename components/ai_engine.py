@@ -7,92 +7,76 @@ from typing import Dict, List, Tuple, Any
 import streamlit as st
 from utils.config import Config
 
+
 class AIEngine:
     """AI Engine for generating interview questions and evaluations"""
     
     def __init__(self):
         self.config = Config()
-        self.headers = self.config.HF_HEADERS
+        self.headers = self.config.HF_HEADERS if hasattr(self.config, 'HF_HEADERS') else {}
     
-    def generate_interview_content(self, role_data: Dict[str, Any]) -> Tuple[str, List[str]]:
+    def generate_single_question(self, role_data: Dict[str, Any], question_number: int, previous_questions: List[str] = None) -> str:
         """
-        Generate personalized introduction and interview questions
-        
-        Args:
-            role_data: Dictionary containing role information
+        Generate a single interview question based on role and question number
+        """
+        if previous_questions is None:
+            previous_questions = []
             
-        Returns:
-            Tuple of (introduction, list of questions)
-        """
         try:
-            # Generate introduction
-            introduction = self._generate_introduction(role_data)
+            prompt = f"""
+Generate 1 interview question for a {role_data['title']} position.
+
+Role Description: {role_data['description']}
+Key Skills: {', '.join(role_data['key_skills'])}
+Experience Level: {role_data['experience_level']}
+Question Number: {question_number}
+
+Previously asked questions:
+{chr(10).join(previous_questions) if previous_questions else 'None'}
+
+Generate a unique question that:
+- Assesses {role_data['title']} skills
+- Is appropriate for question #{question_number}
+- Doesn't repeat previous questions
+- Encourages detailed responses
+
+Format: Just return the question without "Q:" prefix.
+"""
             
-            # Generate questions
-            questions = self._generate_questions(role_data)
+            generated_text = self._query_huggingface_api(prompt, max_tokens=150)
+            question = self._extract_question_from_text(generated_text)
             
-            return introduction, questions
+            if not question or len(question) < 10:
+                return self._get_fallback_question(role_data, question_number)
+                
+            return question
             
         except Exception as e:
-            st.error(f"Error generating interview content: {e}")
-            return self._get_fallback_content(role_data)
+            st.warning(f"Using fallback question due to API error: {e}")
+            return self._get_fallback_question(role_data, question_number)
     
-    def _generate_introduction(self, role_data: Dict[str, Any]) -> str:
+    def generate_interview_introduction(self, role_data: Dict[str, Any], total_questions: int) -> str:
         """Generate personalized introduction"""
-        return self.config.GREETING_TEMPLATE.format(
-            role_title=role_data['title'],
-            question_count=self.config.MAX_QUESTION_COUNT
-        )
+        return f"""
+Hello and welcome to your {role_data['title']} interview!
+
+I'm an AI interviewer designed to help evaluate your skills and experience for this position. 
+This interview will consist of {total_questions} questions tailored specifically to the {role_data['title']} role.
+
+Please take your time with each response, speak clearly, and feel free to provide detailed examples 
+from your experience. Each question will be presented one at a time, and you'll have the opportunity 
+to record your audio response.
+
+Let's begin when you're ready!
+"""
     
-    def _generate_questions(self, role_data: Dict[str, Any]) -> List[str]:
-        """Generate interview questions using Hugging Face API"""
-        
-        prompt = f"""
-        Generate {self.config.MAX_QUESTION_COUNT} interview questions for a {role_data['title']} position.
-        
-        Role Description: {role_data['description']}
-        Key Skills: {', '.join(role_data['key_skills'])}
-        Experience Level: {role_data['experience_level']}
-        
-        Create questions that assess:
-        1. Technical competency
-        2. Practical experience
-        3. Problem-solving abilities
-        4. Communication skills
-        5. Cultural fit
-        6. Leadership potential
-        7. Specific role knowledge
-        
-        Format each question on a new line starting with "Q:" followed by the question.
-        Make questions specific, relevant, and appropriate for the experience level.
-        
-        Example format:
-        Q: Can you describe your experience with [specific technology]?
-        Q: How would you approach [specific scenario]?
-        """
-        
-        try:
-            questions = self._query_huggingface_api(prompt, max_tokens=500)
-            parsed_questions = self._parse_questions(questions)
-            
-            # Ensure we have the right number of questions
-            if len(parsed_questions) < self.config.MIN_QUESTION_COUNT:
-                parsed_questions.extend(self._get_fallback_questions(role_data))
-            
-            return parsed_questions[:self.config.MAX_QUESTION_COUNT]
-            
-        except Exception as e:
-            st.warning(f"Using fallback questions due to API error: {e}")
-            return self._get_fallback_questions(role_data)
-    
-    def _query_huggingface_api(self, prompt: str, max_tokens: int = 300, model: str = None) -> str:
+    def _query_huggingface_api(self, prompt: str, max_tokens: int = 150) -> str:
         """Query Hugging Face API with retry logic"""
         
         if not self.config.HF_API_TOKEN:
             raise ValueError("Hugging Face API token not configured")
         
-        model_name = model or "microsoft/DialoGPT-medium"
-        api_url = f"{self.config.HF_API_URL}/{model_name}"
+        api_url = f"https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
         
         payload = {
             "inputs": prompt,
@@ -104,8 +88,7 @@ class AIEngine:
             }
         }
         
-        max_retries = 3
-        for attempt in range(max_retries):
+        for attempt in range(3):
             try:
                 response = requests.post(
                     api_url, 
@@ -121,90 +104,101 @@ class AIEngine:
                     return result.get('generated_text', '')
                 
                 elif response.status_code == 503:
-                    # Model is loading, wait and retry
-                    time.sleep(10 * (attempt + 1))
+                    time.sleep(5 * (attempt + 1))
                     continue
                 else:
                     response.raise_for_status()
                     
             except Exception as e:
-                if attempt == max_retries - 1:
+                if attempt == 2:
                     raise e
                 time.sleep(2 ** attempt)
         
         raise Exception("Max retries exceeded")
     
-    def _parse_questions(self, generated_text: str) -> List[str]:
-        """Parse questions from generated text"""
-        questions = []
+    def _extract_question_from_text(self, generated_text: str) -> str:
+        """Extract clean question from generated text"""
         lines = generated_text.split('\n')
         
         for line in lines:
             line = line.strip()
-            if line.startswith('Q:'):
-                question = line[2:].strip()
-                if len(question) > 10:  # Basic validation
-                    questions.append(question)
-            elif '?' in line and len(line) > 20:
-                # Catch questions that might not have the Q: prefix
-                questions.append(line.strip())
+            if '?' in line and len(line) > 15:
+                # Clean up the question
+                if line.startswith('Q:'):
+                    line = line[2:].strip()
+                return line
         
-        return questions
+        # If no good question found, return the first substantial line
+        for line in lines:
+            line = line.strip()
+            if len(line) > 15:
+                return line + "?"
+        
+        return ""
     
-    def _get_fallback_questions(self, role_data: Dict[str, Any]) -> List[str]:
+    def _get_fallback_question(self, role_data: Dict[str, Any], question_number: int) -> str:
         """Generate fallback questions when API fails"""
         
         role_title = role_data['title'].lower()
-        base_questions = [
-            f"Tell me about your experience in {role_data['title']} roles.",
-            "What attracted you to this position and our company?",
-            "Describe a challenging project you've worked on recently.",
-            "How do you stay updated with industry trends and technologies?",
-            "Tell me about a time you had to work under pressure or tight deadlines.",
-            "How do you approach problem-solving in your work?",
-            "Describe your experience working in a team environment."
+        
+        # General questions that work for any role
+        general_questions = [
+            f"Tell me about your experience in {role_data['title']} roles and what attracted you to this field.",
+            "Can you describe a challenging project you've worked on recently and how you approached it?",
+            "How do you stay updated with the latest trends and technologies in your field?",
+            "Tell me about a time when you had to work under pressure or tight deadlines. How did you manage it?",
+            "Describe a situation where you had to collaborate with team members who had different opinions. How did you handle it?",
+            "What do you consider your greatest professional achievement so far, and why?",
+            "How do you approach problem-solving when faced with a complex technical challenge?"
         ]
         
         # Role-specific questions
+        role_specific = []
+        
         if 'developer' in role_title or 'engineer' in role_title:
-            base_questions.extend([
-                "Walk me through your development process from requirement to deployment.",
-                "How do you ensure code quality and maintainability?",
-                "Describe a technical challenge you overcame recently."
-            ])
+            role_specific = [
+                "Walk me through your development process from requirement analysis to deployment.",
+                "How do you ensure code quality and maintainability in your projects?",
+                "Describe a time when you had to debug a particularly difficult issue.",
+                "What programming languages and frameworks do you prefer and why?"
+            ]
         
-        elif 'data' in role_title:
-            base_questions.extend([
-                "How do you approach data analysis for business problems?",
-                "What tools and technologies do you prefer for data work?",
-                "Describe a data project that had significant business impact."
-            ])
+        elif 'data' in role_title or 'scientist' in role_title:
+            role_specific = [
+                "How do you approach data analysis for solving business problems?",
+                "Describe a data project that had significant business impact.",
+                "What tools and technologies do you use for data analysis and visualization?",
+                "How do you handle missing or inconsistent data in your analysis?"
+            ]
         
-        elif 'manager' in role_title:
-            base_questions.extend([
+        elif 'product' in role_title or 'manager' in role_title:
+            role_specific = [
                 "How do you prioritize features and make product decisions?",
-                "Describe your experience with stakeholder management.",
-                "Tell me about a successful product launch you've managed."
-            ])
+                "Describe your experience with stakeholder management and communication.",
+                "Tell me about a successful product launch you've managed.",
+                "How do you gather and incorporate user feedback into product development?"
+            ]
         
-        return base_questions[:self.config.MAX_QUESTION_COUNT]
-    
-    def _get_fallback_content(self, role_data: Dict[str, Any]) -> Tuple[str, List[str]]:
-        """Get fallback content when AI generation fails"""
-        introduction = self._generate_introduction(role_data)
-        questions = self._get_fallback_questions(role_data)
-        return introduction, questions
+        elif 'marketing' in role_title:
+            role_specific = [
+                "How do you measure the success of your marketing campaigns?",
+                "Describe a marketing campaign you created that exceeded expectations.",
+                "How do you stay current with digital marketing trends and best practices?",
+                "What's your approach to understanding and targeting different customer segments?"
+            ]
+        
+        # Combine questions
+        all_questions = general_questions + role_specific
+        
+        # Return question based on question number
+        if question_number <= len(all_questions):
+            return all_questions[question_number - 1]
+        
+        return "Tell me more about your experience and what makes you a good fit for this role."
     
     def evaluate_responses(self, role_data: Dict[str, Any], qa_pairs: List[Dict[str, str]]) -> Dict[str, Any]:
         """
         Evaluate candidate responses and generate comprehensive report
-        
-        Args:
-            role_data: Role information
-            qa_pairs: List of question-answer pairs
-            
-        Returns:
-            Evaluation report dictionary
         """
         try:
             return self._generate_evaluation_report(role_data, qa_pairs)
@@ -213,142 +207,83 @@ class AIEngine:
             return self._get_fallback_evaluation(role_data, qa_pairs)
     
     def _generate_evaluation_report(self, role_data: Dict[str, Any], qa_pairs: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Generate detailed evaluation using AI"""
+        """Generate detailed evaluation using simple heuristics"""
         
-        # Create context for evaluation
-        context = f"""
-        Role: {role_data['title']}
-        Description: {role_data['description']}
-        Key Skills Required: {', '.join(role_data['key_skills'])}
-        Experience Level: {role_data['experience_level']}
+        # Calculate overall score based on response quality
+        total_score = 0
+        skill_ratings = {}
         
-        Interview Questions and Answers:
-        """
+        for qa in qa_pairs:
+            response_length = len(qa['answer'])
+            word_count = len(qa['answer'].split())
+            
+            # Score based on response quality indicators
+            if response_length > 200 and word_count > 30:
+                score = 4.5
+            elif response_length > 100 and word_count > 20:
+                score = 3.5
+            elif response_length > 50 and word_count > 10:
+                score = 2.5
+            else:
+                score = 1.5
+            
+            total_score += score
         
-        for i, qa in enumerate(qa_pairs, 1):
-            context += f"\n\nQ{i}: {qa['question']}\nA{i}: {qa['answer'][:500]}..."  # Limit answer length for context
-        
-        # Generate summary
-        summary_prompt = f"""
-        {context}
-        
-        Based on the candidate's responses above, provide a comprehensive evaluation summary.
-        Focus on:
-        - Overall impression and fit for the role
-        - Key strengths demonstrated
-        - Areas for improvement or concerns
-        - Specific examples from their responses
-        - Recommendation (Strong Hire/Hire/Maybe/No Hire)
-        
-        Keep the summary professional, balanced, and specific.
-        """
-        
-        try:
-            summary = self._query_huggingface_api(summary_prompt, max_tokens=400)
-        except:
-            summary = "Unable to generate AI summary. Manual review recommended."
+        overall_score = total_score / len(qa_pairs) if qa_pairs else 0
         
         # Generate skill ratings
-        skill_ratings = self._evaluate_skills(role_data, qa_pairs)
+        for skill in role_data['key_skills']:
+            # Simple skill rating based on keyword presence and overall performance
+            skill_score = overall_score + (0.5 if any(skill.lower() in qa['answer'].lower() for qa in qa_pairs) else -0.5)
+            skill_ratings[skill] = max(1.0, min(5.0, skill_score))
         
-        # Calculate overall score
-        overall_score = sum(skill_ratings.values()) / len(skill_ratings) if skill_ratings else 0
+        # Generate summary
+        if overall_score >= 4.0:
+            summary = "Excellent candidate with strong communication skills and relevant experience. Provided detailed, thoughtful responses that demonstrate deep understanding of the role requirements."
+        elif overall_score >= 3.0:
+            summary = "Good candidate with solid experience and communication skills. Responses show understanding of key concepts with room for some improvement in detail and depth."
+        elif overall_score >= 2.0:
+            summary = "Average candidate with basic understanding of the role. Responses were adequate but lacked depth and detail in some areas."
+        else:
+            summary = "Candidate may need additional development. Responses were brief and didn't fully demonstrate the required level of expertise for this role."
+        
+        recommendations = self._generate_recommendations(overall_score, skill_ratings)
         
         return {
             'overall_score': round(overall_score, 1),
             'summary': summary,
             'skill_ratings': skill_ratings,
-            'recommendations': self._generate_recommendations(overall_score, skill_ratings),
+            'recommendations': recommendations,
             'evaluation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
             'total_questions': len(qa_pairs)
         }
-    
-    def _evaluate_skills(self, role_data: Dict[str, Any], qa_pairs: List[Dict[str, str]]) -> Dict[str, float]:
-        """Evaluate specific skills based on responses"""
-        skill_ratings = {}
-        
-        # Basic skill evaluation (this could be enhanced with more sophisticated NLP)
-        for skill in role_data['key_skills']:
-            rating = self._rate_skill_from_responses(skill, qa_pairs)
-            skill_ratings[skill] = rating
-        
-        # Add evaluation criteria ratings
-        for criteria in self.config.EVALUATION_CRITERIA:
-            if criteria not in skill_ratings:
-                rating = self._rate_criteria_from_responses(criteria, qa_pairs)
-                skill_ratings[criteria] = rating
-        
-        return skill_ratings
-    
-    def _rate_skill_from_responses(self, skill: str, qa_pairs: List[Dict[str, str]]) -> float:
-        """Rate a specific skill based on candidate responses"""
-        # Simple keyword-based scoring (can be enhanced with ML models)
-        skill_keywords = {
-            'JavaScript': ['javascript', 'js', 'react', 'vue', 'angular', 'node'],
-            'Python': ['python', 'django', 'flask', 'pandas', 'numpy'],
-            'Communication': ['explain', 'team', 'collaborate', 'present', 'discuss'],
-            'Leadership': ['lead', 'manage', 'mentor', 'guide', 'decision'],
-            'Problem Solving': ['solve', 'challenge', 'debug', 'analyze', 'approach']
-        }
-        
-        keywords = skill_keywords.get(skill, [skill.lower()])
-        
-        score = 0
-        total_responses = len(qa_pairs)
-        
-        for qa in qa_pairs:
-            answer_lower = qa['answer'].lower()
-            keyword_count = sum(1 for keyword in keywords if keyword in answer_lower)
-            response_length = len(qa['answer'])
-            
-            # Score based on keyword presence and response quality
-            if keyword_count > 0:
-                score += min(keyword_count * 0.3, 1.0)  # Max 1 point per response
-            
-            # Bonus for detailed responses
-            if response_length > 100:
-                score += 0.2
-        
-        # Normalize to 1-5 scale
-        normalized_score = 1 + (score / total_responses) * 4
-        return min(5.0, max(1.0, normalized_score))
-    
-    def _rate_criteria_from_responses(self, criteria: str, qa_pairs: List[Dict[str, str]]) -> float:
-        """Rate evaluation criteria from responses"""
-        # Basic heuristic scoring
-        total_length = sum(len(qa['answer']) for qa in qa_pairs)
-        avg_length = total_length / len(qa_pairs) if qa_pairs else 0
-        
-        # Score based on response quality indicators
-        if avg_length > 200:
-            return 4.0 + (min(avg_length, 500) - 200) / 300  # Scale from 4 to 5
-        elif avg_length > 100:
-            return 3.0 + (avg_length - 100) / 100  # Scale from 3 to 4
-        elif avg_length > 50:
-            return 2.0 + (avg_length - 50) / 50   # Scale from 2 to 3
-        else:
-            return 1.0 + avg_length / 50  # Scale from 1 to 2
     
     def _generate_recommendations(self, overall_score: float, skill_ratings: Dict[str, float]) -> List[str]:
         """Generate recommendations based on evaluation"""
         recommendations = []
         
         if overall_score >= 4.0:
-            recommendations.append("Strong candidate - Recommend for next round")
+            recommendations.append("Strong candidate - Highly recommend for next interview round")
+            recommendations.append("Consider for expedited hiring process")
         elif overall_score >= 3.0:
-            recommendations.append("Good candidate - Consider for next round with reservations")
+            recommendations.append("Good candidate - Recommend for next round with standard process")
+            recommendations.append("May benefit from additional technical assessment")
+        elif overall_score >= 2.0:
+            recommendations.append("Average candidate - Consider additional evaluation")
+            recommendations.append("May need skills development in key areas")
         else:
-            recommendations.append("May not be the right fit for this role")
+            recommendations.append("Below expectations - May not be suitable for current role")
+            recommendations.append("Consider for junior positions or provide additional training")
         
-        # Find strengths and weaknesses
+        # Identify strengths and weaknesses
         strengths = [skill for skill, rating in skill_ratings.items() if rating >= 4.0]
         weaknesses = [skill for skill, rating in skill_ratings.items() if rating < 2.5]
         
         if strengths:
-            recommendations.append(f"Key strengths: {', '.join(strengths[:3])}")
+            recommendations.append(f"Key strengths demonstrated: {', '.join(strengths[:3])}")
         
         if weaknesses:
-            recommendations.append(f"Areas for development: {', '.join(weaknesses[:3])}")
+            recommendations.append(f"Areas needing improvement: {', '.join(weaknesses[:3])}")
         
         return recommendations
     
@@ -356,9 +291,9 @@ class AIEngine:
         """Generate fallback evaluation when AI fails"""
         return {
             'overall_score': 3.0,
-            'summary': 'Evaluation generated using fallback method. Manual review recommended.',
+            'summary': 'Basic evaluation completed. Recommend manual review for detailed assessment.',
             'skill_ratings': {skill: 3.0 for skill in role_data['key_skills']},
-            'recommendations': ['Manual evaluation required', 'Review responses manually'],
+            'recommendations': ['Manual evaluation required', 'Schedule follow-up interview'],
             'evaluation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
             'total_questions': len(qa_pairs)
         }

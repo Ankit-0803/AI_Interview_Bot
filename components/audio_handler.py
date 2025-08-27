@@ -1,124 +1,100 @@
+"""
+Simplified audio handling without WebRTC
+"""
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-import av
-import numpy as np
-import queue
-from typing import Any, Optional
-
-
-# WebRTC ICE servers configuration
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
+import time
+from typing import Dict, Any
 
 
 class AudioRecorder:
-    """Handle audio recording via WebRTC"""
-
+    """Simplified audio recorder using Streamlit's audio_recorder"""
+    
     def __init__(self):
-        self._audio_queue: queue.Queue[np.ndarray] = queue.Queue()
-        self._is_recording = False
-        self.recording_start_time = None
-        self.recording_end_time = None
-
-    def audio_frame_callback(self, frame: av.AudioFrame) -> av.AudioFrame:
-        """Callback to collect audio frames when recording."""
-        if self._is_recording:
-            arr = frame.to_ndarray()  # shape: (channels, samples)
-            self._audio_queue.put(arr)
-        return frame
-
-    def create_streamer(self, key: str):
-        """Instantiate the WebRTC audio-only streamer."""
-        return webrtc_streamer(
-            key=key,
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTC_CONFIGURATION,
-            media_stream_constraints={"audio": True, "video": False},
-            audio_frame_callback=self.audio_frame_callback,
-            async_processing=True,
-        )
-
-    def start(self):
-        """Begin recording: clear queue and flag recording on."""
-        self._is_recording = True
-        self.recording_start_time = st.time()
-        while not self._audio_queue.empty():
-            try:
-                self._audio_queue.get_nowait()
-            except queue.Empty:
-                break
-
-    def stop_and_get(self) -> Optional[np.ndarray]:
-        """Stop recording and return concatenated audio or None."""
-        self._is_recording = False
-        self.recording_end_time = st.time()
-        frames = []
-        while not self._audio_queue.empty():
-            try:
-                frames.append(self._audio_queue.get_nowait())
-            except queue.Empty:
-                break
-
-        if not frames:
-            return None
-
-        # Concatenate along the samples axis
-        return np.concatenate(frames, axis=-1)
-
-    def create_recording_interface(self, question_number: int, question_text: str) -> dict:
-        """
-        Streamlit interface to record audio for a given question.
-        Returns a dictionary with:
-          - has_recording: bool
-          - audio_data: numpy.ndarray or None
-          - duration: float (seconds) or 0
-        """
-
-        st.markdown(f"### Question {question_number}: {question_text}")
-
-        # Use WebRTC streamer for audio recording
-        webrtc_ctx = self.create_streamer(key=f"audio_recorder_{question_number}")
-
-        # Local state for recording management
-        if 'is_recording' not in st.session_state:
-            st.session_state['is_recording'] = False
-        if 'recorded_audio' not in st.session_state:
-            st.session_state['recorded_audio'] = None
-        if 'recording_start' not in st.session_state:
-            st.session_state['recording_start'] = None
-
-        def start_recording():
-            st.session_state['is_recording'] = True
-            self.start()
-            st.session_state['recording_start'] = time.time()
-
-        def stop_recording():
-            st.session_state['is_recording'] = False
-            audio = self.stop_and_get()
-            st.session_state['recorded_audio'] = audio
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if not st.session_state['is_recording']:
-                if st.button("🔴 Start Recording"):
-                    start_recording()
+        pass
+    
+    def create_recording_interface(self, question_number: int, question_text: str) -> Dict[str, Any]:
+        """Create recording interface using streamlit-audiorecorder"""
+        
+        st.markdown(f"### 🎤 Question {question_number}")
+        st.info(question_text)
+        
+        # Session state keys
+        audio_key = f"audio_q{question_number}"
+        submitted_key = f"submitted_q{question_number}"
+        
+        # Initialize session state
+        if audio_key not in st.session_state:
+            st.session_state[audio_key] = None
+        if submitted_key not in st.session_state:
+            st.session_state[submitted_key] = False
+        
+        st.markdown("---")
+        st.markdown("### 🎙️ Record Your Answer")
+        
+        try:
+            # Try to use streamlit-audiorecorder
+            from audiorecorder import audiorecorder
+            
+            audio_data = audiorecorder("🎤 Click to record", "⏹️ Recording...")
+            
+            if audio_data is not None and len(audio_data) > 0:
+                st.session_state[audio_key] = audio_data
+                
+                # Show playback
+                st.success("✅ Recording completed!")
+                st.audio(audio_data.export().read())
+                
+                # Submit button
+                if not st.session_state[submitted_key]:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("🔄 Re-record", key=f"rerecord_{question_number}"):
+                            st.session_state[audio_key] = None
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button("✅ Submit Recording", 
+                                   key=f"submit_{question_number}", 
+                                   type="primary"):
+                            st.session_state[submitted_key] = True
+                            st.success("🎉 Recording submitted!")
+                            st.balloons()
+                            time.sleep(1)
+                            st.rerun()
+                else:
+                    st.success("✅ Recording submitted - ready for transcription!")
+            
             else:
-                if st.button("⏹ Stop Recording"):
-                    stop_recording()
-
-        with col2:
-            duration = 0
-            if st.session_state['recording_start'] and st.session_state['is_recording']:
-                duration = time.time() - st.session_state['recording_start']
-                st.markdown(f"Recording for {duration:.1f} seconds...")
-
-            elif st.session_state['recorded_audio'] is not None:
-                duration = st.session_state['recorded_audio'].shape[-1] / 48000  # assuming 48kHz sample rate
-                st.markdown(f"Recorded audio length: {duration:.1f} seconds")
-
+                st.info("👆 Click the microphone button above to start recording")
+        
+        except ImportError:
+            # Fallback to file uploader
+            st.warning("Audio recorder not available. Please upload an audio file instead.")
+            
+            uploaded_audio = st.file_uploader(
+                "Upload your audio response",
+                type=['wav', 'mp3', 'm4a'],
+                key=f"upload_{question_number}"
+            )
+            
+            if uploaded_audio is not None:
+                st.session_state[audio_key] = uploaded_audio
+                st.audio(uploaded_audio)
+                
+                if not st.session_state[submitted_key]:
+                    if st.button("✅ Submit Audio", 
+                               key=f"submit_upload_{question_number}", 
+                               type="primary"):
+                        st.session_state[submitted_key] = True
+                        st.success("🎉 Audio submitted!")
+                        time.sleep(1)
+                        st.rerun()
+        
         return {
-            'has_recording': st.session_state['recorded_audio'] is not None,
-            'audio_data': st.session_state['recorded_audio'],
-            'duration': duration,
+            'has_recording': st.session_state[audio_key] is not None,
+            'audio_data': st.session_state[audio_key],
+            'is_recording': False,
+            'is_submitted': st.session_state[submitted_key],
+            'duration': 0
         }

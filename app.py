@@ -1,11 +1,10 @@
 """
-Main Streamlit application for AI Audio Interview Bot
+Main Streamlit application for AI Interview Bot - SIMPLIFIED VERSION
 """
 import streamlit as st
-import json
-from pathlib import Path
 import time
 from datetime import datetime
+from pathlib import Path
 
 # Component imports
 from components.ai_engine import AIEngine
@@ -15,28 +14,15 @@ from components.report_generator import ReportGenerator
 
 # Utility imports
 from utils.config import Config
-from utils.helpers import generate_session_id, load_json, format_duration
+from utils.helpers import generate_session_id, load_json, save_json
 
-# ✅ Ensure default step on first load or after reset
-valid_steps = [
-    "welcome", "interview_setup", "interview_process",
-    "interview_complete", "view_reports"
-]
-if (
-    "current_step" not in st.session_state
-    or st.session_state.current_step not in valid_steps
-):
-    st.session_state.current_step = "welcome"
-
-# Page configuration - set AFTER session state init
+# Page configuration
 st.set_page_config(
-    page_title="AI Audio Interview Bot",
+    page_title="AI Interview Bot",
     page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Load custom CSS
 def load_css():
     css_file = Path("assets/styles.css")
     if css_file.exists():
@@ -45,31 +31,26 @@ def load_css():
 
 load_css()
 
-
 class InterviewBot:
-    """Main Interview Bot Application"""
-    
     def __init__(self):
         self.config = Config()
         self.ai_engine = AIEngine()
         self.audio_recorder = AudioRecorder()
         self.speech_processor = SpeechProcessor()
         self.report_generator = ReportGenerator()
-        
-        # Initialize session state
         self._initialize_session_state()
     
     def _initialize_session_state(self):
-        """Initialize session state variables"""
-        
         defaults = {
+            'step': 'welcome',
             'session_id': generate_session_id(),
-            'current_step': 'welcome',
-            'selected_role': None,
             'candidate_name': '',
+            'selected_role': None,
+            'total_questions': 5,
+            'current_question_number': 1,
             'interview_introduction': '',
-            'interview_questions': [],
-            'current_question_index': 0,
+            'current_question': '',
+            'previous_questions': [],
             'qa_pairs': [],
             'interview_complete': False,
             'evaluation_results': None,
@@ -81,520 +62,387 @@ class InterviewBot:
                 st.session_state[key] = default_value
     
     def run(self):
-        """Run the main application"""
-        
-        # Sidebar
         self._render_sidebar()
         
-        # Main content
-        if st.session_state.current_step == 'welcome':
-            self._render_welcome_page()
-        elif st.session_state.current_step == 'interview_setup':
-            self._render_interview_setup()
-        elif st.session_state.current_step == 'interview_process':
-            self._render_interview_process()
-        elif st.session_state.current_step == 'interview_complete':
-            self._render_interview_complete()
-        elif st.session_state.current_step == 'view_reports':
-            self._render_reports_dashboard()
+        if st.session_state.step == 'welcome':
+            self._render_welcome()
+        elif st.session_state.step == 'setup':
+            self._render_setup()
+        elif st.session_state.step == 'interview':
+            self._render_interview()
+        elif st.session_state.step == 'complete':
+            self._render_complete()
     
     def _render_sidebar(self):
-        """Render sidebar with navigation and info"""
-        
         with st.sidebar:
             st.markdown("# 🤖 AI Interview Bot")
             
-            # Session info
-            if st.session_state.current_step != 'welcome':
+            if st.session_state.step != 'welcome':
                 st.markdown("---")
                 st.markdown("### Session Info")
-                st.info(f"Session ID: {st.session_state.session_id[:12]}...")
-                
-                if st.session_state.selected_role:
-                    st.info(f"Role: {st.session_state.selected_role['title']}")
-                
                 if st.session_state.candidate_name:
                     st.info(f"Candidate: {st.session_state.candidate_name}")
+                if st.session_state.selected_role:
+                    st.info(f"Role: {st.session_state.selected_role['title']}")
             
-            # Navigation
-            st.markdown("---")
-            st.markdown("### Navigation")
-            
-            # 🚀 Start New Interview (always visible)
-            if st.button("👩🏻‍💻 Start New Interview",use_container_width=True):
-             for key in list(st.session_state.keys()):
-                if key != 'session_id':
-                   del st.session_state[key]
-                st.session_state.session_id = generate_session_id()
-             st.session_state.current_step = 'interview_setup'
-             st.rerun()
-
-            
-            if st.button("🏠 Home", use_container_width=True):
-                st.session_state.current_step = 'welcome'
-                st.rerun()
-            
-            if st.button("📊 View Reports", use_container_width=True):
-                st.session_state.current_step = 'view_reports'
-                st.rerun()
-            
-            if st.button("🔄 Reset Session", use_container_width=True):
-                for key in list(st.session_state.keys()):
-                    if key not in ['session_id']:  # Keep session_id
-                        del st.session_state[key]
-                st.session_state.session_id = generate_session_id()
-                st.session_state.current_step = 'welcome'
-                st.rerun()
-            
-            # Progress indicator
-            if st.session_state.current_step == 'interview_process':
+            if st.session_state.step == 'interview':
                 st.markdown("---")
                 st.markdown("### Progress")
-                
-                current_q = st.session_state.current_question_index
-                total_q = len(st.session_state.interview_questions)
-                
-                progress = (current_q + 1) / total_q if total_q > 0 else 0
+                completed = len(st.session_state.qa_pairs)
+                current = st.session_state.current_question_number
+                total = st.session_state.total_questions
+                progress = completed / total
                 st.progress(progress)
-                
-                st.markdown(f"Question {current_q + 1} of {total_q}")
+                st.markdown(f"Question {current} of {total}")
+                st.markdown(f"Completed: {completed}/{total}")
+            
+            st.markdown("---")
+            if st.button("🏠 Home", use_container_width=True):
+                st.session_state.step = 'welcome'
+                st.rerun()
+            
+            if st.button("🔄 New Interview", use_container_width=True):
+                for key in list(st.session_state.keys()):
+                    if key != 'session_id':
+                        del st.session_state[key]
+                self._initialize_session_state()
+                st.rerun()
     
-    def _render_welcome_page(self):
-        """Render welcome page"""
-        
-        st.markdown("# 👩🏻‍💻 Welcome to AI Video Interview Bot")
+    def _render_welcome(self):
+        st.markdown("# 🤖 Welcome to AI Interview Bot")
         
         st.markdown("""
-        ### Transform Your Hiring Process with AI
-        
-        Our AI-powered interview bot helps streamline your recruitment process by:
-        
-        -  **AI-Generated Questions**: Tailored questions based on role requirements
-        -  **Video Recording**: Browser-based video/audio capture
-        -  **Speech-to-Text**: Automatic transcription of responses
-        -  **AI Evaluation**: Comprehensive candidate assessment
-        -  **Detailed Reports**: Structured evaluation reports
+        ### Simple Interview Process
+        1. 🎤 **Record** your answer
+        2. 📝 **Review** transcription  
+        3. ✅ **Submit** and continue
+        4. 📊 **Get** AI evaluation
         """)
-        
-        # Features showcase
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("""
-            #### 🎯 Smart Questioning
-            - Role-specific questions
-            - Dynamic question generation
-            - Multiple difficulty levels
-            """)
-        
-        with col2:
-            st.markdown("""
-            #### 🎥 Easy Recording
-            - Browser-based recording
-            - No software installation
-            - High-quality audio capture
-            """)
-        
-        with col3:
-            st.markdown("""
-            #### 📈 Comprehensive Analysis
-            - AI-powered evaluation
-            - Skill-based scoring
-            - Actionable insights
-            """)
-        
-        # Get started button
-        st.markdown("---")
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("👩🏻‍💻 Start New Interview", use_container_width=True):
-                st.session_state.current_step = 'interview_setup'
+            if st.button("🚀 Start New Interview", use_container_width=True, type="primary"):
+                st.session_state.step = 'setup'
                 st.rerun()
     
-    def _render_interview_setup(self):
-        """Render interview setup page"""
-        
+    def _render_setup(self):
         st.markdown("# 📋 Interview Setup")
-
-        # Load available roles
-        roles_data = self._load_roles()
         
+        roles_data = self._load_roles()
         if not roles_data:
-            st.error("Could not load role data. Please check the data/roles.json file.")
+            st.error("Could not load role data")
             return
         
-        # Candidate information
         st.markdown("## 👤 Candidate Information")
-        
-        candidate_name = st.text_input(
-            "Candidate Name",
-            value=st.session_state.candidate_name,
-            placeholder="Enter candidate's full name"
-        )
-        
+        candidate_name = st.text_input("Candidate Name *", value=st.session_state.candidate_name)
         st.session_state.candidate_name = candidate_name
         
-        # Role selection
         st.markdown("## 🎯 Role Selection")
-        
         role_options = {role['title']: role for role in roles_data['roles']}
-        selected_role_title = st.selectbox(
-            "Select the role for this interview:",
-            options=list(role_options.keys()),
-            index=0
-        )
+        selected_title = st.selectbox("Select Role *", options=list(role_options.keys()))
+        st.session_state.selected_role = role_options[selected_title]
         
-        selected_role = role_options[selected_role_title]
-        st.session_state.selected_role = selected_role
-        
-        # Display role information
         with st.expander("📄 Role Details", expanded=True):
-            st.markdown(f"**Department:** {selected_role.get('department', 'N/A')}")
-            st.markdown(f"**Experience Level:** {selected_role.get('experience_level', 'N/A')}")
-            st.markdown(f"**Description:** {selected_role['description']}")
-            
-            st.markdown("**Key Skills:**")
-            skills_cols = st.columns(min(len(selected_role['key_skills']), 4))
-            for i, skill in enumerate(selected_role['key_skills']):
-                with skills_cols[i % len(skills_cols)]:
-                    st.markdown(f"• {skill}")
+            role = st.session_state.selected_role
+            st.markdown(f"**Department:** {role.get('department', 'N/A')}")
+            st.markdown(f"**Experience:** {role.get('experience_level', 'N/A')}")
+            st.markdown(f"**Description:** {role['description']}")
+            st.markdown("**Skills:** " + ", ".join(role['key_skills']))
         
-        # Interview configuration
-        st.markdown("## ⚙️ Interview Configuration")
+        total_questions = st.slider("Number of Questions", 3, 7, 5)
+        st.session_state.total_questions = total_questions
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            question_count = st.slider(
-                "Number of questions",
-                min_value=self.config.MIN_QUESTION_COUNT,
-                max_value=self.config.MAX_QUESTION_COUNT,
-                value=self.config.MAX_QUESTION_COUNT
-            )
-        
-        with col2:
-            transcription_method = st.selectbox(
-                "Transcription method",
-                ["google", "sphinx", "whisper"],
-                index=0,
-                help="Google: Free, accurate, online | Sphinx: Offline, basic | Whisper: Premium, most accurate"
-            )
-        
-        # Start interview button
         st.markdown("---")
-        
-        if st.button("🎬 Generate Questions & Start Interview", use_container_width=True):
+        if st.button("🎬 Start Interview", use_container_width=True, type="primary"):
             if not candidate_name.strip():
-                st.warning("Please enter the candidate's name.")
+                st.warning("Please enter candidate name")
                 return
             
-            # Generate interview content
-            with st.spinner("🤖 Generating personalized interview content..."):
+            with st.spinner("🤖 Preparing interview..."):
                 try:
-                    introduction, questions = self.ai_engine.generate_interview_content(selected_role)
-                    
-                    # Limit questions to selected count
-                    questions = questions[:question_count]
-                    
+                    introduction = self.ai_engine.generate_interview_introduction(
+                        st.session_state.selected_role, total_questions
+                    )
                     st.session_state.interview_introduction = introduction
-                    st.session_state.interview_questions = questions
-                    st.session_state.transcription_method = transcription_method
+                    
+                    first_question = self.ai_engine.generate_single_question(
+                        st.session_state.selected_role, 1, []
+                    )
+                    st.session_state.current_question = first_question
+                    st.session_state.previous_questions = [first_question]
                     st.session_state.start_time = time.time()
                     
-                    st.success(f"✅ Generated {len(questions)} questions successfully!")
-                    
-                    time.sleep(1)  # Brief pause for user to see success message
-                    
-                    st.session_state.current_step = 'interview_process'
+                    st.success("✅ Ready!")
+                    time.sleep(1)
+                    st.session_state.step = 'interview'
                     st.rerun()
-                
                 except Exception as e:
-                    st.error(f"Failed to generate interview content: {e}")
+                    st.error(f"Setup failed: {e}")
     
-    def _render_interview_process(self):
-        """Render the main interview process"""
-        
+    def _render_interview(self):
         st.markdown(f"# 🎤 Interview: {st.session_state.selected_role['title']}")
         
-        # Display introduction if first question
-        if st.session_state.current_question_index == 0:
+        if st.session_state.current_question_number == 1 and len(st.session_state.qa_pairs) == 0:
             with st.expander("👋 Interview Introduction", expanded=True):
                 st.markdown(st.session_state.interview_introduction)
         
-        # Current question
-        current_index = st.session_state.current_question_index
-        questions = st.session_state.interview_questions
+        current_q = st.session_state.current_question_number
+        total_q = st.session_state.total_questions
+        completed = len(st.session_state.qa_pairs)
         
-        if current_index < len(questions):
-            current_question = questions[current_index]
+        progress = completed / total_q
+        st.progress(progress, text=f"Question {current_q} of {total_q} | Completed: {completed}")
+        
+        st.markdown("---")
+        
+        # Check if already answered
+        current_qa = None
+        for qa in st.session_state.qa_pairs:
+            if qa['question_number'] == current_q:
+                current_qa = qa
+                break
+        
+        if current_qa:
+            # Already answered - show navigation
+            st.success(f"✅ Question {current_q} completed!")
             
-            # Progress indicator
-            progress = (current_index) / len(questions)
-            st.progress(progress, text=f"Question {current_index + 1} of {len(questions)}")
+            with st.expander(f"Your Answer to Question {current_q}"):
+                st.markdown(f"**Q:** {current_qa['question']}")
+                st.markdown(f"**A:** {current_qa['answer']}")
             
-            st.markdown("---")
+            # Navigation
+            col1, col2, col3 = st.columns([1, 2, 1])
             
-            # Recording interface
-            recording_result = self.audio_recorder.create_recording_interface(
-                current_index + 1, current_question
-            )
+            with col1:
+                if current_q > 1:
+                    if st.button("⬅️ Previous", use_container_width=True):
+                        st.session_state.current_question_number -= 1
+                        st.rerun()
             
-            # Transcription interface
-            if recording_result['has_recording']:
-                st.markdown("---")
-                transcript = self.speech_processor.create_transcription_interface(
-                    recording_result['audio_data'], 
-                    current_index + 1
-                )
-                
-                # Navigation buttons
-                if transcript.strip():
-                    st.markdown("---")
-                    
-                    col1, col2, col3 = st.columns([1, 2, 1])
-                    
-                    with col1:
-                        if current_index > 0:
-                            if st.button("⬅️ Previous Question"):
-                                # Save current answer if not already saved
-                                if current_index < len(st.session_state.qa_pairs):
-                                    st.session_state.qa_pairs[current_index] = {
-                                        'question': current_question,
-                                        'answer': transcript,
-                                        'duration': recording_result.get('duration', 0)
-                                    }
-                                else:
-                                    st.session_state.qa_pairs.append({
-                                        'question': current_question,
-                                        'answer': transcript,
-                                        'duration': recording_result.get('duration', 0)
-                                    })
-                                
-                                st.session_state.current_question_index -= 1
-                                st.rerun()
-                    
-                    with col2:
-                        st.markdown("**Review your answer and proceed when ready**")
-                    
-                    with col3:
-                        if st.button("➡️ Next Question" if current_index < len(questions) - 1 else "✅ Complete Interview"):
-                            # Save current answer
-                            qa_pair = {
-                                'question': current_question,
-                                'answer': transcript,
-                                'duration': recording_result.get('duration', 0)
-                            }
-                            
-                            # Update or append QA pair
-                            if current_index < len(st.session_state.qa_pairs):
-                                st.session_state.qa_pairs[current_index] = qa_pair
-                            else:
-                                st.session_state.qa_pairs.append(qa_pair)
-                            
-                            # Move to next question or complete
-                            if current_index < len(questions) - 1:
-                                st.session_state.current_question_index += 1
-                                st.rerun()
-                            else:
-                                # Complete interview
-                                self._complete_interview()
+            with col2:
+                st.info(f"Question {current_q} of {total_q} completed")
+            
+            with col3:
+                if current_q < total_q:
+                    if st.button("➡️ Next Question", use_container_width=True, type="primary"):
+                        self._proceed_to_next_question()
+                else:
+                    if st.button("🎯 Complete Interview", use_container_width=True, type="primary"):
+                        self._complete_interview()
         
         else:
-            # All questions completed
-            self._complete_interview()
+            # Current question
+            self._render_current_question()
+    
+    def _render_current_question(self):
+        current_q = st.session_state.current_question_number
+        
+        # Step 1: Recording
+        st.markdown("### 📝 Current Question")
+        st.info(st.session_state.current_question)
+        
+        st.markdown("### 🎤 Step 1: Record Your Answer")
+        recording_result = self.audio_recorder.create_recording_interface(
+            current_q, st.session_state.current_question
+        )
+        
+        # Step 2: Transcription
+        if recording_result['is_submitted'] and recording_result['has_recording']:
+            st.markdown("---")
+            st.markdown("### 📝 Step 2: Review Transcription")
+            
+            transcript = self.speech_processor.create_transcription_interface(
+                recording_result['audio_data'], current_q
+            )
+            
+            # Step 3: Final submission
+            if transcript and transcript.strip():
+                st.markdown("---")
+                st.markdown("### ✅ Step 3: Submit & Continue")
+                
+                with st.container():
+                    st.markdown("**Your Final Answer:**")
+                    st.info(transcript[:300] + "..." if len(transcript) > 300 else transcript)
+                
+                # THE MAIN SUBMIT BUTTON
+                st.markdown("---")
+                col1, col2, col3 = st.columns([1, 3, 1])
+                
+                with col2:
+                    # This is the button you're looking for!
+                    if st.button(
+                        f"✅ SUBMIT ANSWER {current_q} & CONTINUE TO NEXT QUESTION", 
+                        key=f"FINAL_SUBMIT_{current_q}",
+                        use_container_width=True, 
+                        type="primary"
+                    ):
+                        # Save the Q&A
+                        qa_pair = {
+                            'question_number': current_q,
+                            'question': st.session_state.current_question,
+                            'answer': transcript,
+                            'duration': recording_result.get('duration', 0)
+                        }
+                        
+                        st.session_state.qa_pairs.append(qa_pair)
+                        self._save_interview_progress()
+                        
+                        st.success("🎉 Answer submitted successfully!")
+                        st.balloons()
+                        
+                        # Show next step
+                        if current_q < st.session_state.total_questions:
+                            st.info(f"Moving to Question {current_q + 1}...")
+                        else:
+                            st.info("Proceeding to final evaluation...")
+                        
+                        time.sleep(2)
+                        st.rerun()
+                
+                # Show what's next
+                if current_q < st.session_state.total_questions:
+                    st.info(f"⏭️ Next: Question {current_q + 1} of {st.session_state.total_questions}")
+                else:
+                    st.info("⏭️ Next: Final evaluation and results")
+    
+    def _proceed_to_next_question(self):
+        next_q_num = st.session_state.current_question_number + 1
+        
+        if next_q_num <= len(st.session_state.previous_questions):
+            st.session_state.current_question = st.session_state.previous_questions[next_q_num - 1]
+            st.session_state.current_question_number = next_q_num
+            st.rerun()
+        else:
+            with st.spinner("🤖 Generating next question..."):
+                try:
+                    next_question = self.ai_engine.generate_single_question(
+                        st.session_state.selected_role, next_q_num, st.session_state.previous_questions
+                    )
+                    
+                    st.session_state.current_question = next_question
+                    st.session_state.current_question_number = next_q_num
+                    st.session_state.previous_questions.append(next_question)
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
     
     def _complete_interview(self):
-        """Complete the interview and generate evaluation"""
-        
-        st.session_state.interview_complete = True
-        
-        # Calculate total duration
-        if st.session_state.start_time:
-            total_duration = (time.time() - st.session_state.start_time) / 60  # Convert to minutes
-            st.session_state.total_duration = total_duration
-        
-        # Generate evaluation
-        with st.spinner("🤖 Generating AI evaluation..."):
+        with st.spinner("🤖 Generating evaluation..."):
             try:
+                duration = (time.time() - st.session_state.start_time) / 60 if st.session_state.start_time else 0
+                
                 evaluation = self.ai_engine.evaluate_responses(
-                    st.session_state.selected_role,
-                    st.session_state.qa_pairs
+                    st.session_state.selected_role, st.session_state.qa_pairs
                 )
+                
                 st.session_state.evaluation_results = evaluation
                 
-                # Generate and save report
-                session_data = {
+                final_report = {
                     'session_id': st.session_state.session_id,
                     'candidate_name': st.session_state.candidate_name,
-                    'total_duration': st.session_state.get('total_duration', 0),
-                    'transcription_method': st.session_state.get('transcription_method', 'google'),
-                    'ai_model': 'huggingface'  # Track which model was used
+                    'role': st.session_state.selected_role,
+                    'qa_pairs': st.session_state.qa_pairs,
+                    'evaluation': evaluation,
+                    'total_duration_minutes': duration,
+                    'completed_at': datetime.now().isoformat()
                 }
                 
-                report = self.report_generator.generate_comprehensive_report(
-                    session_data,
-                    st.session_state.selected_role,
-                    st.session_state.qa_pairs,
-                    evaluation
-                )
+                report_file = self.config.REPORTS_DIR / f"report_{st.session_state.session_id}.json"
+                save_json(final_report, report_file)
                 
-                # Save report
-                report_path = self.report_generator.save_report(report)
-                st.session_state.report_path = report_path
-                
-                st.session_state.current_step = 'interview_complete'
+                st.session_state.step = 'complete'
                 st.rerun()
-            
+                
             except Exception as e:
-                st.error(f"Failed to generate evaluation: {e}")
-                # Still proceed to completion with basic evaluation
-                st.session_state.evaluation_results = {
-                    'overall_score': 3.0,
-                    'summary': 'Evaluation failed. Manual review required.',
-                    'skill_ratings': {},
-                    'recommendations': ['Manual evaluation needed']
-                }
-                st.session_state.current_step = 'interview_complete'
-                st.rerun()
+                st.error(f"Error: {e}")
     
-    def _render_interview_complete(self):
-        """Render interview completion page"""
-        
+    def _render_complete(self):
         st.markdown("# ✅ Interview Complete!")
         
-        st.success(f"🎉 Congratulations! You have completed the {st.session_state.selected_role['title']} interview.")
+        st.success(f"🎉 {st.session_state.candidate_name} completed the {st.session_state.selected_role['title']} interview!")
         
-        # Interview summary
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Questions Answered", len(st.session_state.qa_pairs))
-        
-        with col2:
-            total_duration = st.session_state.get('total_duration', 0)
-            st.metric("Total Duration", f"{total_duration:.1f} min")
-        
-        with col3:
-            overall_score = st.session_state.evaluation_results.get('overall_score', 0)
-            st.metric("Overall Score", f"{overall_score:.1f}/5.0")
-        
-        # Generate and display report
+        # Show results
         if st.session_state.evaluation_results:
-            st.markdown("---")
+            evaluation = st.session_state.evaluation_results
+            score = evaluation['overall_score']
             
-            session_data = {
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Questions", len(st.session_state.qa_pairs))
+            with col2:
+                st.metric("Score", f"{score}/5.0")
+            with col3:
+                duration = (time.time() - st.session_state.start_time) / 60 if st.session_state.start_time else 0
+                st.metric("Duration", f"{duration:.1f}min")
+            
+            st.markdown("---")
+            if score >= 4.0:
+                st.success(f"🌟 **Excellent Performance** - {score}/5.0")
+            elif score >= 3.0:
+                st.info(f"👍 **Good Performance** - {score}/5.0")
+            else:
+                st.warning(f"📈 **Needs Improvement** - {score}/5.0")
+            
+            st.markdown("### Summary")
+            st.write(evaluation['summary'])
+            
+            if evaluation.get('recommendations'):
+                st.markdown("### Recommendations")
+                for rec in evaluation['recommendations']:
+                    st.markdown(f"• {rec}")
+        
+        # Q&A Review
+        st.markdown("---")
+        st.markdown("## Interview Review")
+        for qa in st.session_state.qa_pairs:
+            with st.expander(f"Q{qa['question_number']}: {qa['question'][:50]}..."):
+                st.markdown(f"**Question:** {qa['question']}")
+                st.markdown(f"**Answer:** {qa['answer']}")
+        
+        # Actions
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 New Interview", use_container_width=True):
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                self._initialize_session_state()
+                st.rerun()
+        with col2:
+            if st.button("🏠 Home", use_container_width=True):
+                st.session_state.step = 'welcome'
+                st.rerun()
+    
+    def _load_roles(self):
+        try:
+            roles_file = self.config.DATA_DIR / 'roles.json'
+            return load_json(roles_file)
+        except:
+            return None
+    
+    def _save_interview_progress(self):
+        try:
+            progress_data = {
                 'session_id': st.session_state.session_id,
                 'candidate_name': st.session_state.candidate_name,
-                'total_duration': st.session_state.get('total_duration', 0),
-                'transcription_method': st.session_state.get('transcription_method', 'google')
+                'role': st.session_state.selected_role,
+                'qa_pairs': st.session_state.qa_pairs,
+                'last_updated': datetime.now().isoformat()
             }
             
-            report = self.report_generator.generate_comprehensive_report(
-                session_data,
-                st.session_state.selected_role,
-                st.session_state.qa_pairs,
-                st.session_state.evaluation_results
-            )
-            
-            # Display report
-            self.report_generator.display_report(report)
-            
-            # Download button
-            st.markdown("---")
-            
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                report_bytes = self.report_generator.create_downloadable_report(report)
-                
-                st.download_button(
-                    label="📥 Download Full Report (JSON)",
-                    data=report_bytes,
-                    file_name=f"interview_report_{st.session_state.session_id}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-        
-        # Action buttons
-        st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🔄 Start New Interview", use_container_width=True):
-                # Reset session for new interview
-                for key in list(st.session_state.keys()):
-                    if key not in ['session_id']:
-                        del st.session_state[key]
-                st.session_state.session_id = generate_session_id()
-                st.session_state.current_step = 'welcome'
-                st.rerun()
-        
-        with col2:
-            if st.button("📊 View All Reports", use_container_width=True):
-                st.session_state.current_step = 'view_reports'
-                st.rerun()
-    
-    def _render_reports_dashboard(self):
-        """Render reports dashboard"""
-        
-        st.markdown("# 📊 Reports Dashboard")
-        
-        # Load all reports
-        reports = self._load_all_reports()
-        
-        if not reports:
-            st.info("No reports available yet. Complete some interviews to see reports here.")
-            return
-        
-        # Display dashboard
-        self.report_generator.create_summary_dashboard(reports)
-        
-        # Individual report viewer
-        st.markdown("---")
-        st.markdown("## 📄 Individual Reports")
-        
-        report_files = list(self.config.REPORTS_DIR.glob("*.json"))
-        
-        if report_files:
-            selected_file = st.selectbox(
-                "Select a report to view:",
-                options=report_files,
-                format_func=lambda x: x.stem
-            )
-            
-            if st.button("📖 View Selected Report"):
-                report_data = load_json(selected_file)
-                if report_data:
-                    self.report_generator.display_report(report_data)
-        
-    def _load_roles(self):
-        """Load role data from JSON file"""
-        roles_file = self.config.DATA_DIR / 'roles.json'
-        return load_json(roles_file)
-    
-    def _load_all_reports(self):
-        """Load all saved reports"""
-        reports = []
-        
-        for report_file in self.config.REPORTS_DIR.glob("*.json"):
-            try:
-                report_data = load_json(report_file)
-                if report_data:
-                    reports.append(report_data)
-            except:
-                continue
-        
-        return sorted(reports, key=lambda x: x['session_info']['interview_date'], reverse=True)
+            progress_file = self.config.SESSIONS_DIR / f"session_{st.session_state.session_id}.json"
+            save_json(progress_data, progress_file)
+        except Exception as e:
+            st.error(f"Save failed: {e}")
 
 def main():
-    """Main application entry point"""
     try:
         app = InterviewBot()
         app.run()
     except Exception as e:
-        st.error(f"Application error: {e}")
-        st.info("Please refresh the page and try again.")
+        st.error(f"App error: {e}")
+        st.info("Please refresh and try again.")
 
 if __name__ == "__main__":
     main()

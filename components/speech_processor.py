@@ -6,16 +6,15 @@ import speech_recognition as sr
 import numpy as np
 import tempfile
 import os
-from typing import Optional, Union, Any
+from typing import Optional, Any
 from pydub import AudioSegment
 import io
-from utils.config import Config
+
 
 class SpeechProcessor:
     """Handle speech-to-text conversion"""
     
     def __init__(self):
-        self.config = Config()
         self.recognizer = sr.Recognizer()
         # Configure recognizer settings
         self.recognizer.energy_threshold = 300
@@ -25,17 +24,12 @@ class SpeechProcessor:
     def transcribe_audio(self, audio_data: Any, method: str = "google") -> str:
         """
         Transcribe audio data to text
-        
-        Args:
-            audio_data: Audio data from recorder
-            method: Recognition method ("google", "sphinx", "whisper")
-            
-        Returns:
-            Transcribed text
         """
+        if audio_data is None:
+            return "No audio data provided"
         
         try:
-            # Convert audio data to the format expected by speech_recognition
+            # Prepare audio for transcription
             audio_file = self._prepare_audio_for_transcription(audio_data)
             
             if audio_file is None:
@@ -60,7 +54,7 @@ class SpeechProcessor:
         
         finally:
             # Cleanup temporary file
-            if 'audio_file' in locals() and audio_file:
+            if 'audio_file' in locals() and audio_file and os.path.exists(audio_file):
                 try:
                     os.unlink(audio_file)
                 except:
@@ -70,36 +64,41 @@ class SpeechProcessor:
         """Prepare audio data for transcription"""
         
         try:
-            # Handle different types of audio data
-            if hasattr(audio_data, 'export'):
-                # Streamlit audiorecorder AudioSegment
-                audio_segment = audio_data
-            
-            elif isinstance(audio_data, np.ndarray):
-                # Raw numpy array from WebRTC
-                # Convert to AudioSegment
-                # Assuming 16kHz sample rate, 16-bit samples
-                audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()
+            if isinstance(audio_data, np.ndarray):
+                # Handle numpy array from WebRTC
+                audio_data = audio_data.flatten() if audio_data.ndim > 1 else audio_data
+                
+                # Convert to proper format for AudioSegment
+                if audio_data.dtype != np.int16:
+                    # Normalize and convert to int16
+                    if np.max(np.abs(audio_data)) > 0:
+                        audio_data = audio_data / np.max(np.abs(audio_data))
+                    audio_data = (audio_data * 32767).astype(np.int16)
+                
+                # Create AudioSegment from raw audio
                 audio_segment = AudioSegment(
-                    data=audio_bytes,
-                    sample_width=2,
-                    frame_rate=16000,
-                    channels=1
+                    data=audio_data.tobytes(),
+                    sample_width=2,  # 16-bit
+                    frame_rate=16000,  # 16kHz
+                    channels=1  # Mono
                 )
-            
+                
             elif isinstance(audio_data, bytes):
-                # Raw audio bytes
+                # Handle raw audio bytes
                 audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
-            
+                
+            elif hasattr(audio_data, 'export'):
+                # Already an AudioSegment
+                audio_segment = audio_data
+                
             else:
                 st.error(f"Unsupported audio data type: {type(audio_data)}")
                 return None
             
-            # Convert to WAV format for speech recognition
-            # Ensure it's mono and at 16kHz (standard for speech recognition)
+            # Ensure proper format for speech recognition
             audio_segment = audio_segment.set_channels(1).set_frame_rate(16000)
             
-            # Export to temporary file
+            # Export to temporary WAV file
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
             audio_segment.export(temp_file.name, format="wav")
             
@@ -117,153 +116,140 @@ class SpeechProcessor:
                 return self._transcribe_google(audio_segment)
             elif method == "sphinx":
                 return self._transcribe_sphinx(audio_segment)
-            elif method == "whisper":
-                return self._transcribe_whisper(audio_segment)
             else:
                 # Default to Google
                 return self._transcribe_google(audio_segment)
         
         except Exception as e:
-            # Try fallback methods
-            fallback_methods = ["google", "sphinx"]
-            for fallback in fallback_methods:
-                if fallback != method:
-                    try:
-                        return self._transcribe_with_method(audio_segment, fallback)
-                    except:
-                        continue
+            # Try fallback method
+            if method != "google":
+                try:
+                    return self._transcribe_google(audio_segment)
+                except:
+                    pass
             
             raise e
     
     def _transcribe_google(self, audio_segment: sr.AudioData) -> str:
         """Transcribe using Google Speech Recognition (free tier)"""
         try:
-            return self.recognizer.recognize_google(audio_segment)
+            result = self.recognizer.recognize_google(audio_segment)
+            return result if result else "Could not understand audio"
         except sr.UnknownValueError:
-            return "Could not understand audio"
+            return "Could not understand the audio clearly"
         except sr.RequestError as e:
-            raise Exception(f"Google Speech Recognition error: {e}")
+            raise Exception(f"Google Speech Recognition service error: {e}")
     
     def _transcribe_sphinx(self, audio_segment: sr.AudioData) -> str:
         """Transcribe using offline Sphinx (requires pocketsphinx)"""
         try:
-            return self.recognizer.recognize_sphinx(audio_segment)
+            result = self.recognizer.recognize_sphinx(audio_segment)
+            return result if result else "Could not understand audio"
         except sr.UnknownValueError:
-            return "Could not understand audio"
+            return "Could not understand the audio clearly"
         except sr.RequestError as e:
-            raise Exception(f"Sphinx error: {e}")
+            raise Exception(f"Sphinx recognition error: {e}")
         except Exception:
-            raise Exception("Sphinx not available. Install pocketsphinx: pip install pocketsphinx")
-    
-    def _transcribe_whisper(self, audio_segment: sr.AudioData) -> str:
-        """Transcribe using OpenAI Whisper API"""
-        
-        if not self.config.OPENAI_API_KEY:
-            raise Exception("OpenAI API key not configured")
-        
-        try:
-            import openai
-            openai.api_key = self.config.OPENAI_API_KEY
-            
-            # Save audio to temporary file for Whisper
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                with open(tmp_file.name, "wb") as f:
-                    f.write(audio_segment.get_wav_data())
-                
-                # Transcribe with Whisper
-                with open(tmp_file.name, "rb") as audio_file:
-                    transcript = openai.Audio.transcribe("whisper-1", audio_file)
-                
-                os.unlink(tmp_file.name)
-                return transcript["text"]
-        
-        except ImportError:
-            raise Exception("OpenAI package not installed: pip install openai")
-        except Exception as e:
-            raise Exception(f"Whisper API error: {e}")
+            raise Exception("Sphinx not available. Install with: pip install pocketsphinx")
     
     def create_transcription_interface(self, audio_data: Any, question_number: int) -> str:
-        """Create interface for transcription with method selection"""
-        
+        """
+        Create interface for transcription with automatic processing
+        """
         if audio_data is None:
+            st.warning("No audio data available for transcription")
             return ""
         
-        st.subheader("🎯 Speech-to-Text Transcription")
+        st.markdown("### 🎯 Speech-to-Text Transcription")
+        
+        # Auto-transcribe if not already done
+        transcript_key = f"transcript_q{question_number}"
+        transcribing_key = f"transcribing_q{question_number}"
+        
+        if transcript_key not in st.session_state:
+            st.session_state[transcript_key] = ""
+        
+        if transcribing_key not in st.session_state:
+            st.session_state[transcribing_key] = False
         
         # Method selection
         method = st.selectbox(
-            "Choose transcription method:",
-            ["google", "sphinx", "whisper"],
+            "Transcription method:",
+            ["google", "sphinx"],
             index=0,
-            key=f"transcribe_method_{question_number}",
-            help="""
-            - Google: Free, accurate, requires internet
-            - Sphinx: Offline, less accurate
-            - Whisper: Most accurate, requires OpenAI API key
-            """
+            key=f"method_q{question_number}",
+            help="Google: Accurate, requires internet | Sphinx: Offline, basic accuracy"
         )
         
-        # Transcription button
-        if st.button(f"🎤 Transcribe Audio", key=f"transcribe_{question_number}"):
-            with st.spinner("Transcribing audio..."):
-                transcript = self.transcribe_audio(audio_data, method)
-                st.session_state[f'transcript_{question_number}'] = transcript
+        # Auto-transcribe button or show existing transcript
+        if not st.session_state[transcript_key] and not st.session_state[transcribing_key]:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("🎤 Transcribe Audio", key=f"transcribe_btn_{question_number}", use_container_width=True):
+                    st.session_state[transcribing_key] = True
+                    st.rerun()
+            
+            with col2:
+                if st.button("⚡ Auto-Transcribe", key=f"auto_transcribe_btn_{question_number}", use_container_width=True, type="primary"):
+                    st.session_state[transcribing_key] = True
+                    st.rerun()
         
-        # Display transcript
-        transcript = st.session_state.get(f'transcript_{question_number}', '')
+        # Perform transcription
+        if st.session_state[transcribing_key] and not st.session_state[transcript_key]:
+            with st.spinner("🎤 Transcribing your audio response..."):
+                try:
+                    transcript = self.transcribe_audio(audio_data, method)
+                    st.session_state[transcript_key] = transcript
+                    st.session_state[transcribing_key] = False
+                    st.success("✅ Transcription completed!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Transcription failed: {e}")
+                    st.session_state[transcribing_key] = False
+                    st.session_state[transcript_key] = "Transcription failed. Please try again or speak more clearly."
+                    st.rerun()
         
-        if transcript:
+        # Display and edit transcript
+        if st.session_state[transcript_key]:
             st.success("✅ Transcription completed!")
+            
+            # Show original transcript
+            with st.expander("📝 Original Transcript", expanded=False):
+                st.write(st.session_state[transcript_key])
             
             # Editable transcript
             edited_transcript = st.text_area(
-                "Review and edit transcript:",
-                value=transcript,
-                height=100,
+                "Review and edit your transcript:",
+                value=st.session_state[transcript_key],
+                height=120,
                 key=f"edit_transcript_{question_number}",
-                help="You can edit the transcript to correct any errors"
+                help="You can edit this transcript to correct any errors before submitting"
             )
+            
+            # Update session state with edited version
+            st.session_state[transcript_key] = edited_transcript
             
             return edited_transcript
         
         return ""
     
-    def batch_transcribe(self, audio_recordings: list, method: str = "google") -> list:
-        """Transcribe multiple audio recordings"""
-        
-        transcripts = []
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for i, audio_data in enumerate(audio_recordings):
-            status_text.text(f"Transcribing recording {i+1} of {len(audio_recordings)}")
-            
-            try:
-                transcript = self.transcribe_audio(audio_data, method)
-                transcripts.append(transcript)
-            except Exception as e:
-                st.error(f"Error transcribing recording {i+1}: {e}")
-                transcripts.append(f"Transcription failed: {str(e)}")
-            
-            progress_bar.progress((i + 1) / len(audio_recordings))
-        
-        status_text.text("✅ All transcriptions completed!")
-        
-        return transcripts
-    
-    def get_audio_quality_metrics(self, audio_data: Any) -> dict:
-        """Analyze audio quality for transcription"""
-        
+    def get_audio_quality_info(self, audio_data: Any) -> dict:
+        """Get basic audio quality information"""
         try:
-            if hasattr(audio_data, 'duration_seconds'):
-                duration = audio_data.duration_seconds
+            if isinstance(audio_data, np.ndarray):
+                duration = len(audio_data) / 16000  # Assuming 16kHz sample rate
+                max_amplitude = np.max(np.abs(audio_data))
+                
                 if duration < 1:
-                    return {'quality': 'poor', 'reason': 'Too short (less than 1 second)'}
+                    return {'quality': 'poor', 'reason': 'Recording too short (less than 1 second)'}
+                elif max_amplitude < 0.01:
+                    return {'quality': 'poor', 'reason': 'Audio level very low, please speak louder'}
                 elif duration > 300:
-                    return {'quality': 'warning', 'reason': 'Very long (over 5 minutes)'}
+                    return {'quality': 'warning', 'reason': 'Very long recording (over 5 minutes)'}
                 else:
-                    return {'quality': 'good', 'duration': duration}
+                    return {'quality': 'good', 'duration': f"{duration:.1f}s", 'level': 'normal'}
             
             return {'quality': 'unknown', 'reason': 'Could not analyze audio'}
         

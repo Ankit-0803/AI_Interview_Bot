@@ -1,5 +1,5 @@
 """
-Configuration settings for the AI Video Interview Bot
+Configuration settings for the AI Interview Bot
 """
 import os
 from pathlib import Path
@@ -19,7 +19,7 @@ class Config:
     # Application Settings
     DEBUG_MODE = os.getenv('DEBUG_MODE', 'False').lower() == 'true'
     MAX_QUESTION_COUNT = int(os.getenv('MAX_QUESTION_COUNT', 7))
-    MIN_QUESTION_COUNT = int(os.getenv('MIN_QUESTION_COUNT', 5))
+    MIN_QUESTION_COUNT = int(os.getenv('MIN_QUESTION_COUNT', 3))
     AUDIO_SAMPLE_RATE = int(os.getenv('AUDIO_SAMPLE_RATE', 16000))
     
     # Paths
@@ -39,23 +39,23 @@ class Config:
     
     # Interview Configuration
     GREETING_TEMPLATE = """
-    Hello and welcome to your {role_title} interview! 
-    
-    I'm an AI interviewer designed to help evaluate your skills and experience for this position. 
-    This interview will consist of {question_count} questions tailored specifically to the {role_title} role.
-    
-    Please take your time with each response, speak clearly, and feel free to provide detailed examples 
-    from your experience. Each question will be presented one at a time, and you'll have the opportunity 
-    to record your video response.
-    
-    Let's begin when you're ready!
-    """
+Hello and welcome to your {role_title} interview!
+
+I'm an AI interviewer designed to help evaluate your skills and experience for this position. 
+This interview will consist of {question_count} questions tailored specifically to the {role_title} role.
+
+Please take your time with each response, speak clearly, and feel free to provide detailed examples 
+from your experience. Each question will be presented one at a time, and you'll have the opportunity 
+to record your audio response.
+
+Let's begin when you're ready!
+"""
     
     # Evaluation Criteria
     EVALUATION_CRITERIA = [
         "Technical Skills",
         "Communication",
-        "Problem Solving",
+        "Problem Solving", 
         "Experience Relevance",
         "Cultural Fit",
         "Leadership Potential"

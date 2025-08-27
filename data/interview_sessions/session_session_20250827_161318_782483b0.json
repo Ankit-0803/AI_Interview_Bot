@@ -1,0 +1,28 @@
+{
+  "session_id": "session_20250827_161318_782483b0",
+  "candidate_name": "Varun",
+  "role": {
+    "id": "frontend_developer",
+    "title": "Frontend Developer",
+    "description": "Responsible for developing user-facing web applications using modern JavaScript frameworks like React, Vue.js, or Angular. Focus on creating responsive, accessible, and performant user interfaces while collaborating with UX/UI designers and backend developers.",
+    "key_skills": [
+      "JavaScript",
+      "React/Vue/Angular",
+      "HTML/CSS",
+      "Responsive Design",
+      "Testing",
+      "Git"
+    ],
+    "experience_level": "Mid-Senior Level",
+    "department": "Engineering"
+  },
+  "qa_pairs": [
+    {
+      "question_number": 1,
+      "question": "Tell me about your experience in Frontend Developer roles and what attracted you to this field.",
+      "answer": "Transcription failed. Please try again or speak more clearly.",
+      "duration": 0
+    }
+  ],
+  "last_updated": "2025-08-27T16:25:21.157214"
+}
