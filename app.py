@@ -109,19 +109,20 @@ class InterviewBot:
                 st.rerun()
     
     def _render_welcome(self):
-        st.markdown("# 🤖 Welcome to AI Interview Bot")
+        st.markdown("# 👩🏻‍💻 Welcome to AI Interview Bot")
         
         st.markdown("""
-        ### Simple Interview Process
-        1. 🎤 **Record** your answer
-        2. 📝 **Review** transcription  
-        3. ✅ **Submit** and continue
-        4. 📊 **Get** AI evaluation
-        """)
+        ## Transform Your Hiring Process with AI
+        ### Our AI powered interview bot helps streamline your recruitement process by:   
+        ##### 1. AI-Generated Questions: Tailored to role requirements
+        ##### 2. Audio Recording: Browser-based audio capture
+        ##### 3. Speech-to-Text: Automatic transcription of responses  
+        ##### 4. AI Evaluation: Comprehensive candidate assessment
+        ##### 5. Detailed Reports: Structured evaluation reports  """)
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 Start New Interview", use_container_width=True, type="primary"):
+            if st.button("# 👩🏻‍💻 Start New Interview", use_container_width=True, type="primary"):
                 st.session_state.step = 'setup'
                 st.rerun()
     

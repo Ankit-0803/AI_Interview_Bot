@@ -1,0 +1,28 @@
+{
+  "session_id": "session_20250827_170031_9b3a7824",
+  "candidate_name": "Ankit Kushwaha",
+  "role": {
+    "id": "data_scientist",
+    "title": "Data Scientist",
+    "description": "Analyze complex datasets to extract actionable insights, build predictive models, and create data visualizations. Work with stakeholders to understand business problems and translate them into data science solutions using Python, R, and machine learning techniques.",
+    "key_skills": [
+      "Python",
+      "Machine Learning",
+      "Statistics",
+      "Data Visualization",
+      "SQL",
+      "Communication"
+    ],
+    "experience_level": "Mid-Senior Level",
+    "department": "Data & Analytics"
+  },
+  "qa_pairs": [
+    {
+      "question_number": 1,
+      "question": "Tell me about your experience in Data Scientist roles and what attracted you to this field.",
+      "answer": "so, i have worked with librarries like tensorflow, pytorch and panda",
+      "duration": 0
+    }
+  ],
+  "last_updated": "2025-08-27T17:02:37.075923"
+}

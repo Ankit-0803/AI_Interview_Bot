@@ -1,0 +1,59 @@
+{
+  "session_id": "session_20250827_192332_828605a7",
+  "candidate_name": "AK",
+  "role": {
+    "id": "data_scientist",
+    "title": "Data Scientist",
+    "description": "Analyze complex datasets to extract actionable insights, build predictive models, and create data visualizations. Work with stakeholders to understand business problems and translate them into data science solutions using Python, R, and machine learning techniques.",
+    "key_skills": [
+      "Python",
+      "Machine Learning",
+      "Statistics",
+      "Data Visualization",
+      "SQL",
+      "Communication"
+    ],
+    "experience_level": "Mid-Senior Level",
+    "department": "Data & Analytics"
+  },
+  "qa_pairs": [
+    {
+      "question_number": 1,
+      "question": "Tell me about your experience in Data Scientist roles and what attracted you to this field.",
+      "answer": "so basically I have experience with libraries like tensorflow, pytorch and pandas",
+      "duration": 0
+    },
+    {
+      "question_number": 2,
+      "question": "Can you describe a challenging project you've worked on recently and how you approached it?",
+      "answer": "Subah challenging project I worked on is the current project that is AI interview what I have to fix the audio recording issue because it was not performing",
+      "duration": 0
+    },
+    {
+      "question_number": 3,
+      "question": "How do you stay updated with the latest trends and technologies in your field?",
+      "answer": "so I keep Google in I have turned on notifications for the latest technologies and explore them with examples thank you",
+      "duration": 0
+    }
+  ],
+  "evaluation": {
+    "overall_score": 3.2,
+    "summary": "Good candidate with solid experience and communication skills. Responses show understanding of key concepts with room for some improvement in detail and depth.",
+    "skill_ratings": {
+      "Python": 2.6666666666666665,
+      "Machine Learning": 2.6666666666666665,
+      "Statistics": 2.6666666666666665,
+      "Data Visualization": 2.6666666666666665,
+      "SQL": 2.6666666666666665,
+      "Communication": 2.6666666666666665
+    },
+    "recommendations": [
+      "Good candidate - Recommend for next round with standard process",
+      "May benefit from additional technical assessment"
+    ],
+    "evaluation_date": "2025-08-27 19:26:45",
+    "total_questions": 3
+  },
+  "total_duration_minutes": 2.9153759996096293,
+  "completed_at": "2025-08-27T19:26:45.456102"
+}
